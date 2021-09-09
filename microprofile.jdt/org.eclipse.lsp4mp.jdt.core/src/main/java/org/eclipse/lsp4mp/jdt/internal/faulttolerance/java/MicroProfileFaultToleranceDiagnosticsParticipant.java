@@ -37,8 +37,10 @@ import java.util.stream.Stream;
 
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IOpenable;
+import org.eclipse.jdt.core.ITypeRoot;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -103,9 +105,35 @@ public class MicroProfileFaultToleranceDiagnosticsParticipant implements IJavaDi
 			try {
 				validateMethod(node, diagnostics, context);
 			} catch (JavaModelException e) {
-				LOGGER.log(Level.WARNING, "An exception occurred when attempting to validate the fallback method");
+				LOGGER.log(Level.WARNING, "An exception occurred when attempting to validate the annotation");
 			}
 			super.visit(node);
+			return true;
+		}
+		
+		@Override
+		public boolean visit(TypeDeclaration type) {
+			// Retrieve annotation(s) marked on class
+			@SuppressWarnings("rawtypes")
+			List modifiers = type.modifiers();
+			for (Object modifier : modifiers) {
+				if (modifier instanceof Annotation) {
+					Annotation annotation = (Annotation) modifier;
+					if (isMatchAnnotation(annotation, ASYNCHRONOUS_ANNOTATION)) {
+						try {
+							MethodDeclaration[] methods = type.getMethods();
+							for (MethodDeclaration node : methods) {
+								MarkerAnnotation markAnnotation = (MarkerAnnotation) modifier;
+								validateAsynchronousAnnotation(node, diagnostics, context, markAnnotation);
+							}
+						} catch (JavaModelException e) {
+							LOGGER.log(Level.WARNING, "An exception occurred when attempting to validate the annotation");
+						}
+						break;
+					}
+				}
+			}
+			super.visit(type);
 			return true;
 		}
 
